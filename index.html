@@ -1206,12 +1206,19 @@ document.querySelectorAll('#toolSeg button').forEach(b=>b.onclick=()=>{S.tool=b.
 
 // ---------- schematic ----------
 function schTermsAll(){const out=[],d=D();LV.devices.forEach(dv=>{const pl=d.sch.placed[dv.id];if(!pl)return;const t=sTerms(dv.type,pl.x,pl.y,pl.flip);for(const k in t)out.push({id:dv.id+'.'+k,p:t[k]});});return out;}
+// each schematic wire is shown in the colour/letter its conductor has on the wiring diagram
+function schDispMarks(lv,sch,an){const d=D();if(s2w()||!WIRING||!WIRING.wires)return sch.wires.map(w=>w.mark);
+  const u=ufFrom(an.pairs),ue=ufFrom(WIRING.wires.map(w=>[w.from,w.to]));const byRoot={};
+  terminalList(lv).forEach(t=>{const r=u.find(t);(byRoot[r]=byRoot[r]||new Set()).add(ue.find(t));});
+  const markOf={};WIRING.wires.forEach((w,i)=>{if(d.marks[i])(markOf[ue.find(w.from)]=markOf[ue.find(w.from)]||new Set()).add(d.marks[i]);});
+  return sch.wires.map(wr=>{const nodes=byRoot[u.find('P'+K(wr.pts[0]))];const ms=new Set();if(nodes)nodes.forEach(n=>(markOf[n]||[]).forEach(m=>ms.add(m)));
+    if(!ms.size)return wr.mark;if(wr.mark&&ms.has(wr.mark))return wr.mark;return ms.size===1?[...ms][0]:wr.mark||[...ms][0];});}
 function renderSchematic(){
   const svg=$('#ssvg');svg.innerHTML='';const lv=LV,d=D(),sch=s2w()?answerSch(lv):d.sch,V=VOLTS[lv.volt],ink='var(--sheet-ink)';
   const pat=el('pattern',{id:'grid',width:20,height:20,patternUnits:'userSpaceOnUse'},el('defs',{},svg));
   [[0,0],[20,0],[0,20],[20,20]].forEach(([a,b])=>el('circle',{cx:a,cy:b,r:1.1,fill:'var(--sheet-grid)'},pat));
   el('rect',{x:0,y:0,width:640,height:500,fill:'url(#grid)'},svg);
-  const an=schAnalyze(lv,sch),sim=simView(lv,an.pairs,d.sw);
+  const an=schAnalyze(lv,sch),sim=simView(lv,an.pairs,d.sw),DM=schDispMarks(lv,sch,an);
   const hg=el('g',{},svg);const ln=(x1,y1,x2,y2)=>el('line',{x1,y1,x2,y2,stroke:ink,'stroke-width':1.2},hg);
   ln(RAIL_A,44,RAIL_A,RAIL_TOP);ln(RAIL_B,44,RAIL_B,RAIL_TOP);ln(RAIL_A,60,262,60);ln(378,60,RAIL_B,60);
   el('polyline',{points:`${RAIL_A+12},53 ${RAIL_A},60 ${RAIL_A+12},67`,fill:'none',stroke:ink,'stroke-width':1.4},hg);
@@ -1222,7 +1229,7 @@ function renderSchematic(){
   if(S.live&&!sim.short&&sim.on!==false)el('line',{x1:RAIL_A,y1:RAIL_TOP,x2:RAIL_A,y2:RAIL_BOT,stroke:'#ff7a1a','stroke-width':8,'stroke-opacity':.4},svg);
   el('line',{x1:RAIL_A,y1:RAIL_TOP,x2:RAIL_A,y2:RAIL_BOT,stroke:ink,'stroke-width':2.6},svg);el('line',{x1:RAIL_B,y1:RAIL_TOP,x2:RAIL_B,y2:RAIL_BOT,stroke:ink,'stroke-width':2.6},svg);
   const wg=el('g',{},svg);
-  sch.wires.forEach(wr=>{const pts=wr.pts.map(p=>p.join(',')).join(' ');const isLive=S.live&&!sim.short&&sim.u.find('P'+K(wr.pts[0]))===sim.rA;
+  sch.wires.forEach((wr,wi)=>{wr={pts:wr.pts,mark:DM[wi]};const pts=wr.pts.map(p=>p.join(',')).join(' ');const isLive=S.live&&!sim.short&&sim.u.find('P'+K(wr.pts[0]))===sim.rA;
     if(wr.mark&&showColor())el('polyline',{points:pts,fill:'none',stroke:mcol(wr.mark),'stroke-width':11,'stroke-opacity':.6,'stroke-linecap':'round','stroke-linejoin':'round'},wg);
     if(isLive)el('polyline',{points:pts,fill:'none',stroke:'#ff7a1a','stroke-width':7,'stroke-opacity':.45,'stroke-linecap':'round','stroke-linejoin':'round'},wg);
     el('polyline',{points:pts,fill:'none',stroke:ink,'stroke-width':2,'stroke-linecap':'square'},wg);});
@@ -1235,10 +1242,10 @@ function renderSchematic(){
   if(!AN)drawMeters(svg,lv,sch,an,d);
   if(AN&&AN.fault){const [id,t]=AN.fault.split('.');const pl=sch.placed[id],dv=lv.devices.find(x=>x.id===id);if(pl&&dv){const q=sTerms(dv.type,pl.x,pl.y,pl.flip)[t];if(q)breakMark(svg,q[0],q[1]);}}
   if(showLetter()&&S.endMode==='each'){const tm={};schTermsAll().forEach(t=>tm[K(t.p)]=t.id);
-    sch.wires.forEach(wr=>{if(!wr.mark)return;const g=el('g',{style:'pointer-events:none'},svg);
+    sch.wires.forEach((wr,wi)=>{wr={pts:wr.pts,mark:DM[wi]};if(!wr.mark)return;const g=el('g',{style:'pointer-events:none'},svg);
       [[wr.pts[0],wr.pts],[wr.pts[wr.pts.length-1],wr.pts.slice().reverse()]].forEach(([p,P])=>{let r=tm[K(p)];
         if(!r&&onRail(p))r=p[0]===RAIL_A?'SUP.A':'SUP.B';if(!r||!END[r])return;const L=P.reduce((t,q,i)=>i?t+Math.hypot(q[0]-P[i-1][0],q[1]-P[i-1][1]):0,0);const [x,y]=alongEnd(P,Math.min(15,L*.25));endTag(g,x,y,wr.mark,END[r]);});});}
-  else if(showLetter())sch.wires.forEach(wr=>{if(!wr.mark)return;let bi=0,bl=-1;for(let i=0;i<wr.pts.length-1;i++){const l=Math.abs(wr.pts[i+1][0]-wr.pts[i][0])+Math.abs(wr.pts[i+1][1]-wr.pts[i][1]);if(l>bl){bl=l;bi=i;}}
+  else if(showLetter())sch.wires.forEach((wr,wi)=>{wr={pts:wr.pts,mark:DM[wi]};if(!wr.mark)return;let bi=0,bl=-1;for(let i=0;i<wr.pts.length-1;i++){const l=Math.abs(wr.pts[i+1][0]-wr.pts[i][0])+Math.abs(wr.pts[i+1][1]-wr.pts[i][1]);if(l>bl){bl=l;bi=i;}}
     const a=wr.pts[bi],b=wr.pts[bi+1];tagAt(el('g',{style:'pointer-events:none'},svg),(a[0]+b[0])/2,(a[1]+b[1])/2,wr.mark);});
   if(S.tool==='wire'&&!placing&&!s2w()){const conn=new Set();sch.wires.forEach(wr=>wr.pts.forEach(p=>conn.add(K(p))));
     schTermsAll().forEach(t=>{if(!conn.has(K(t.p)))el('circle',{cx:t.p[0],cy:t.p[1],r:4,fill:'none',stroke:'var(--accent)','stroke-width':1.6,style:'pointer-events:none'},svg);});}
