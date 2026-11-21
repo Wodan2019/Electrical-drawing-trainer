@@ -1,0 +1,14 @@
+Copyright (c) 2026 Cory Kelso. All rights reserved.
+
+The teaching tools in this repository, including their source code, graphics and
+text, are the property of Cory Kelso.
+
+No part of this repository may be copied, modified, redistributed, republished,
+sold, or used to create derivative works without the author's prior written
+permission.
+
+Students and instructors may use the tools for classroom learning through the
+author's published links only. Viewing the files on GitHub does not grant any
+licence to reuse them.
+
+For permission requests, contact Cory Kelso.
